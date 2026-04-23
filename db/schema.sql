@@ -1,5 +1,5 @@
 -- 文章表
-CREATE TABLE posts (
+CREATE TABLE IF NOT EXISTS posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   slug TEXT UNIQUE NOT NULL,
   title TEXT NOT NULL,
@@ -20,12 +20,12 @@ CREATE TABLE posts (
 );
 
 -- 索引
-CREATE INDEX idx_posts_slug ON posts(slug);
-CREATE INDEX idx_posts_category ON posts(category);
-CREATE INDEX idx_posts_published ON posts(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_slug ON posts(slug);
+CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category);
+CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published_at DESC);
 
 -- 全文搜索（SQLite FTS5）
-CREATE VIRTUAL TABLE posts_fts USING fts5(
+CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
   title,
   content,
   content=posts,
@@ -34,22 +34,22 @@ CREATE VIRTUAL TABLE posts_fts USING fts5(
 );
 
 -- 触发器：自动同步 FTS
-CREATE TRIGGER posts_ai AFTER INSERT ON posts BEGIN
+CREATE TRIGGER IF NOT EXISTS posts_ai AFTER INSERT ON posts BEGIN
   INSERT INTO posts_fts(rowid, title, content)
   VALUES (new.id, new.title, new.content);
 END;
 
-CREATE TRIGGER posts_au AFTER UPDATE ON posts BEGIN
+CREATE TRIGGER IF NOT EXISTS posts_au AFTER UPDATE ON posts BEGIN
   UPDATE posts_fts SET title = new.title, content = new.content
   WHERE rowid = new.id;
 END;
 
-CREATE TRIGGER posts_ad AFTER DELETE ON posts BEGIN
+CREATE TRIGGER IF NOT EXISTS posts_ad AFTER DELETE ON posts BEGIN
   DELETE FROM posts_fts WHERE rowid = old.id;
 END;
 
 -- 分类统计表
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT UNIQUE NOT NULL,
   slug TEXT UNIQUE NOT NULL,
@@ -57,13 +57,13 @@ CREATE TABLE categories (
 );
 
 -- 站点设置表
-CREATE TABLE site_settings (
+CREATE TABLE IF NOT EXISTS site_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 
 -- AI 操作表：编辑器 Ask AI 面板的预设操作
-CREATE TABLE ai_actions (
+CREATE TABLE IF NOT EXISTS ai_actions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   action_key TEXT UNIQUE NOT NULL,
   label TEXT NOT NULL,
@@ -78,7 +78,7 @@ CREATE TABLE ai_actions (
   updated_at INTEGER DEFAULT (strftime('%s', 'now'))
 );
 
-INSERT INTO ai_actions
+INSERT OR IGNORE INTO ai_actions
   (action_key, label, description, prompt, temperature, sort_order, is_builtin)
 VALUES
   ('improve', '润色', '让表达更顺更自然',
@@ -101,7 +101,7 @@ VALUES
    0.2, 60, 1);
 
 -- AI Provider 配置表（API Key 使用加密存储）
-CREATE TABLE ai_provider_profiles (
+CREATE TABLE IF NOT EXISTS ai_provider_profiles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   provider TEXT NOT NULL DEFAULT 'custom',
@@ -121,7 +121,7 @@ CREATE TABLE ai_provider_profiles (
 );
 
 -- 文章元数据生成器配置（摘要 / 标签 / slug / 封面）
-CREATE TABLE ai_post_generators (
+CREATE TABLE IF NOT EXISTS ai_post_generators (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   target_key TEXT UNIQUE NOT NULL,
   label TEXT NOT NULL,
@@ -141,66 +141,22 @@ CREATE TABLE ai_post_generators (
   updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
-INSERT INTO ai_post_generators (
+INSERT OR IGNORE INTO ai_post_generators (
   target_key, label, description, prompt, provider_mode, workers_model,
   temperature, max_tokens, aspect_ratio, resolution, is_enabled, is_builtin
 ) VALUES
-  (
-    'summary',
-    '摘要生成',
-    '为文章生成 160 字以内摘要',
-    '你是专业中文编辑。请基于文章标题、分类、标签和正文，输出一个适合博客列表与 SEO 描述使用的中文摘要。要求信息密度高、准确、自然，不要空话，不要标题党，不要加引号。',
-    'workers_ai',
-    '@cf/meta/llama-3.1-8b-instruct',
-    0.4,
-    220,
-    '16:9',
-    '2k',
-    1,
-    1
-  ),
-  (
-    'tags',
-    '标签生成',
-    '提取 3-6 个简洁标签',
-    '你是专业中文编辑。请基于文章信息提取最有区分度的中文标签，偏主题词和领域词，避免空泛词、句子和重复词。',
-    'workers_ai',
-    '@cf/meta/llama-3.1-8b-instruct',
-    0.3,
-    180,
-    '16:9',
-    '2k',
-    1,
-    1
-  ),
-  (
-    'slug',
-    'Slug 生成',
-    '生成英文 kebab-case slug',
-    'You are an expert editor. Generate a short English slug for a blog post. Use only lowercase English words and hyphens. Keep it specific, readable, and concise. Do not include dates unless necessary.',
-    'workers_ai',
-    '@cf/meta/llama-3.1-8b-instruct',
-    0.2,
-    80,
-    '16:9',
-    '2k',
-    1,
-    1
-  ),
-  (
-    'cover',
-    '封面生成',
-    '生成博客封面图',
-    '你是资深视觉总监。请把文章核心观点转化成一张适合作为中文长文封面的图像：构图明确、主视觉单一、气质现代、有 editorial illustration / concept poster 的完成度。默认不要在图中出现任何可读文字、logo、签名或水印。',
-    'workers_ai',
-    '@cf/black-forest-labs/flux-1-schnell',
-    0.7,
-    2000,
-    '16:9',
-    '2k',
-    1,
-    1
-  );
+  ('summary', '摘要生成', '为文章生成 160 字以内摘要',
+   '你是专业中文编辑。请基于文章标题、分类、标签和正文，输出一个适合博客列表与 SEO 描述使用的中文摘要。要求信息密度高、准确、自然，不要空话，不要标题党，不要加引号。',
+   'workers_ai', '@cf/meta/llama-3.1-8b-instruct', 0.4, 220, '16:9', '2k', 1, 1),
+  ('tags', '标签生成', '提取 3-6 个简洁标签',
+   '你是专业中文编辑。请基于文章信息提取最有区分度的中文标签，偏主题词和领域词，避免空泛词、句子和重复词。',
+   'workers_ai', '@cf/meta/llama-3.1-8b-instruct', 0.3, 180, '16:9', '2k', 1, 1),
+  ('slug', 'Slug 生成', '生成英文 kebab-case slug',
+   'You are an expert editor. Generate a short English slug for a blog post. Use only lowercase English words and hyphens. Keep it specific, readable, and concise. Do not include dates unless necessary.',
+   'workers_ai', '@cf/meta/llama-3.1-8b-instruct', 0.2, 80, '16:9', '2k', 1, 1),
+  ('cover', '封面生成', '生成博客封面图',
+   '你是资深视觉总监。请把文章核心观点转化成一张适合作为中文长文封面的图像：构图明确、主视觉单一、气质现代、有 editorial illustration / concept poster 的完成度。默认不要在图中出现任何可读文字、logo、签名或水印。',
+   'workers_ai', '@cf/black-forest-labs/flux-1-schnell', 0.7, 2000, '16:9', '2k', 1, 1);
 
 -- API Token 表（外部工具认证）
 CREATE TABLE IF NOT EXISTS api_tokens (
@@ -212,10 +168,10 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   is_active INTEGER DEFAULT 1
 );
 
-CREATE INDEX idx_api_tokens_token ON api_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_token ON api_tokens(token);
 
 -- 插入默认分类
-INSERT INTO categories (name, slug) VALUES
+INSERT OR IGNORE INTO categories (name, slug) VALUES
   ('未分类', 'uncategorized'),
   ('AI工具', 'ai-tools'),
   ('AI', 'ai');
