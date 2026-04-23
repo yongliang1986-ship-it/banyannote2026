@@ -23,7 +23,6 @@ service = "qiaomu-blog-opensource"
 
 [[d1_databases]]
 binding = "DB"
-binding = "DB"
 database_name = "banyannote"
 database_id = "75f514ef-bc92-4d49-814e-f2f139e3360d"
 
